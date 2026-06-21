@@ -1,11 +1,21 @@
 # ==========================================
-# ИСПРАВЛЕНИЕ ДЛЯ PYTHON 3.10+
+# ИСПРАВЛЕНИЕ ДЛЯ PYTHON 3.14
 # ==========================================
 import asyncio
 import sys
 
+# Для Python 3.10+ используем другой подход
 if sys.version_info >= (3, 10):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    try:
+        # Пытаемся использовать WindowsSelectorEventLoopPolicy (только для Windows)
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except AttributeError:
+        # Для Linux (Render) просто создаем новый event loop
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        except:
+            pass
 
 # ==========================================
 # ⚙️ КОНФИГУРАЦИЯ
