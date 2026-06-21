@@ -4,13 +4,10 @@
 import asyncio
 import sys
 
-# Для Python 3.10+ используем другой подход
 if sys.version_info >= (3, 10):
     try:
-        # Пытаемся использовать WindowsSelectorEventLoopPolicy (только для Windows)
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     except AttributeError:
-        # Для Linux (Render) просто создаем новый event loop
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -102,22 +99,40 @@ async def auto_responder(client, message):
                 print(f"❌ Ошибка: {e}")
 
 # ==========================================
-# РАССЫЛКА
+# РАССЫЛКА (с улучшенной диагностикой)
 # ==========================================
 @app.on_message(filters.text)
 async def broadcast_command(client, message):
     if not message.text.startswith("/рассылка"):
         return
     
+    print("\n" + "="*50)
+    print("🚀 ОБНАРУЖЕНА КОМАНДА РАССЫЛКИ!")
+    print(f"📝 Текст команды: {message.text}")
+    print(f"👤 От кого: {message.from_user.id} ({message.from_user.first_name})")
+    print(f"💬 Чат ID: {message.chat.id}")
+    print("="*50)
+    
+    # Проверяем, что команда от @v_s_o3
     try:
         owner = await client.get_users("v_s_o3")
+        print(f"✅ Найден @v_s_o3, ID: {owner.id}")
         if message.from_user.id != owner.id:
+            print(f"❌ Команда не от @v_s_o3 (от {message.from_user.id})")
+            await message.reply("❌ Эта команда доступна только для @v_s_o3!")
             return
-    except:
+    except Exception as e:
+        print(f"❌ Не могу найти @v_s_o3: {e}")
+        await message.reply(f"❌ Не могу найти пользователя @v_s_o3. Ошибка: {e}")
         return
     
+    print("✅ Команда от @v_s_o3")
+    
+    # Парсим команду
     match = re.search(r'/рассылка\s+"([^"]+)"\s+(.*)', message.text)
+    
     if not match:
+        print("❌ Неправильный формат")
         await message.reply("❌ Формат: /рассылка \"Текст\" @user1 @user2")
         return
     
@@ -129,24 +144,56 @@ async def broadcast_command(client, message):
         await message.reply("❌ Укажите получателей!")
         return
     
-    status = await message.reply(f"⏳ Рассылка для {len(usernames)} пользователей...")
+    print(f"📤 Рассылка для {len(usernames)} пользователей")
+    print(f"📝 Текст: {text_to_send[:50]}...")
+    print(f"👥 Пользователи: {usernames}")
+    
+    # Отправляем статус
+    status = await message.reply(f"⏳ Начинаю рассылку для {len(usernames)} пользователей...")
+    
     success = 0
     failed = 0
     failed_list = []
     
-    for username in usernames:
+    # Отправляем сообщения
+    for i, username in enumerate(usernames, 1):
         try:
+            print(f"  Отправка {i}/{len(usernames)}: @{username}")
             await client.send_message(username, text_to_send)
             success += 1
+            print(f"  ✅ Успешно отправлено @{username}")
             await asyncio.sleep(1.5)
+        except FloodWait as e:
+            print(f"  ⏳ Флуд для @{username}: ждем {e.value} сек")
+            await asyncio.sleep(e.value + 2)
+            try:
+                await client.send_message(username, text_to_send)
+                success += 1
+                print(f"  ✅ Успешно отправлено @{username} (после ожидания)")
+            except Exception as e2:
+                failed += 1
+                failed_list.append(f"@{username}")
+                print(f"  ❌ Ошибка для @{username} после ожидания: {e2}")
+        except PeerIdInvalid:
+            failed += 1
+            failed_list.append(f"@{username}")
+            print(f"  ❌ Пользователь @{username} не найден (PeerIdInvalid)")
+        except UsernameNotOccupied:
+            failed += 1
+            failed_list.append(f"@{username}")
+            print(f"  ❌ Юзернейм @{username} не существует")
         except Exception as e:
             failed += 1
             failed_list.append(f"@{username}")
+            print(f"  ❌ Ошибка для @{username}: {type(e).__name__}: {e}")
     
+    # Отчет
     report = f"✅ Рассылка завершена!\n\n✅ Успешно: {success}\n❌ Ошибок: {failed}"
     if failed_list:
         report += f"\n\n❌ Не удалось: {', '.join(failed_list)}"
+    
     await status.edit(report)
+    print("✅ Рассылка завершена!\n")
 
 # ==========================================
 # ЗАПУСК
