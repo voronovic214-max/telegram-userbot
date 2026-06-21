@@ -266,6 +266,19 @@ async def handle_messages(client, message):
             break
 
 # ==========================================
+# ДЕРЖИМ БОТА В ЖИЗНИ (чтобы не засыпал)
+# ==========================================
+async def keep_alive():
+    """Каждые 5 минут пишем себе, чтобы Render не усыпил бота"""
+    while True:
+        try:
+            await asyncio.sleep(300)  # 5 минут
+            await app.send_message("me", "/ping")
+            print("💓 Бот жив!")
+        except Exception as e:
+            print(f"❌ Ошибка пинга: {e}")
+
+# ==========================================
 # ЗАПУСК
 # ==========================================
 if __name__ == "__main__":
@@ -273,9 +286,15 @@ if __name__ == "__main__":
     print("🤖 ЮЗЕРБОТ ЗАПУЩЕН НА RENDER")
     print("="*60)
     print("📌 Команда: /рассылка \"Текст\" @user1 @user2")
+    print("📌 Keep-alive: каждые 5 минут пингую себя")
     print("="*60 + "\n")
     
     try:
+        # Запускаем keep_alive в фоне
+        loop = asyncio.get_event_loop()
+        loop.create_task(keep_alive())
+        
+        # Запускаем бота
         app.run()
     except Exception as e:
         print(f"❌ Ошибка: {e}")
