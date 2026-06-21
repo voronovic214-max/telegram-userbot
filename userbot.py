@@ -1,18 +1,21 @@
+# ==========================================
+# ИСПРАВЛЕННАЯ ВЕРСИЯ ДЛЯ PYTHON 3.14
+# ==========================================
 import os
 import sys
 import asyncio
 import threading
 import re
-import base64
 from flask import Flask
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait, PeerIdInvalid, UsernameNotOccupied
 
 # ==========================================
-# ФИКС EVENT LOOP
+# КОРРЕКТНОЕ СОЗДАНИЕ EVENT LOOP ДЛЯ PYTHON 3.14
 # ==========================================
+# Эта конструкция гарантированно работает на любой версии Python 3.7+
 try:
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -23,7 +26,7 @@ except RuntimeError:
 API_ID = int(os.environ.get("API_ID", 35509519))
 API_HASH = os.environ.get("API_HASH", "e4880e5a9e196645600b3ce9d10b0f45")
 PHONE_NUMBER = os.environ.get("PHONE_NUMBER", "+375295620114")
-SESSION_STRING = os.environ.get("SESSION_STRING", None)  # ВАЖНО!
+SESSION_STRING = os.environ.get("SESSION_STRING", None)
 
 # ==========================================
 # ВЕБ-СЕРВЕР ДЛЯ RENDER
@@ -42,10 +45,9 @@ def run_web():
 threading.Thread(target=run_web, daemon=True).start()
 
 # ==========================================
-# СОЗДАНИЕ СЕССИИ
+# ИНИЦИАЛИЗАЦИЯ КЛИЕНТА
 # ==========================================
 if SESSION_STRING:
-    # Используем сохраненную сессию
     app = Client(
         name="my_account",
         api_id=API_ID,
@@ -55,7 +57,6 @@ if SESSION_STRING:
     )
     print("✅ Использую сохраненную сессию")
 else:
-    # Создаем новую сессию (при первом запуске)
     app = Client(
         name="my_account",
         api_id=API_ID,
@@ -68,32 +69,23 @@ else:
 # АВТООТВЕТЫ
 # ==========================================
 AUTO_RESPONSES = {
-    ("привет", "здравствуйте", "добрый день", "hi", "hello", "пр", "прив", "здарова", "салют"): 
+    ("привет", "здравствуйте", "добрый день", "hi", "hello", "пр", "прив"): 
         "Привет! 👋 @v_s_o3 скоро ответит!",
     
-    ("как дела", "как жизнь", "как ты", "чё как", "как сам"): 
+    ("как дела", "как жизнь", "как ты", "чё как"): 
         "У меня всё отлично! 🤖 @v_s_o3 ответит позже.",
     
-    ("срочно", "важно", "горит", "немедленно", "asap"): 
+    ("срочно", "важно", "горит", "немедленно"): 
         "🚨 Передал @v_s_o3!",
     
-    ("спасибо", "благодарю", "спс", "thanks", "thx"): 
+    ("спасибо", "благодарю", "спс", "thanks"): 
         "Всегда рад помочь! 👍",
     
-    ("пока", "до свидания", "удачи", "goodbye", "bye"): 
+    ("пока", "до свидания", "удачи", "goodbye"): 
         "Всего хорошего! 👋",
     
-    ("кто ты", "что ты", "бот", "ты бот"): 
+    ("кто ты", "что ты", "бот"): 
         "Я бот-ассистент @v_s_o3 🤖",
-    
-    ("круто", "класс", "супер", "топ", "ого"): 
-        "Ага, согласен! 😎 @v_s_o3 тоже оценит!",
-    
-    ("ок", "окей", "хорошо", "понял", "ясно"): 
-        "Ок! 🔥 Я передам @v_s_o3!",
-    
-    ("братан", "брат", "бро", "друг", "чувак", "чел"): 
-        "Йо, бро! 🤙 @v_s_o3 скоро будет!",
 }
 
 # ==========================================
@@ -107,7 +99,7 @@ async def handle_messages(client, message):
     text = message.text.lower()
     print(f"📩 {message.from_user.first_name}: {text[:50]}")
     
-    # === КОМАНДА РАССЫЛКИ (только @v_s_o3) ===
+    # === КОМАНДА РАССЫЛКИ ===
     if message.text.startswith("/рассылка"):
         try:
             owner = await client.get_users("v_s_o3")
@@ -177,15 +169,17 @@ async def keep_alive():
 # ==========================================
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("🤖 ЮЗЕРБОТ НА RENDER")
+    print("🤖 ЮЗЕРБОТ ЗАПУЩЕН НА RENDER (Python 3.14 совместим)")
     print("="*60)
     print("📌 Команда: /рассылка \"Текст\" @user1 @user2")
     print("📌 Keep-alive: каждые 5 минут")
     print("="*60 + "\n")
     
     try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(keep_alive())
+        # Создаем задачу для keep_alive в правильном loop
+        asyncio.ensure_future(keep_alive(), loop=loop)
+        
+        # Запускаем бота
         app.run()
     except Exception as e:
         print(f"❌ Ошибка: {e}")
