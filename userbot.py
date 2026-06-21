@@ -1,28 +1,38 @@
 # ==========================================
-# ⚙️ КОНФИГУРАЦИЯ
+# ⚙️ КОНФИГУРАЦИЯ (из переменных окружения)
 # ==========================================
-API_ID = 35509519
-API_HASH = "e4880e5a9e196645600b3ce9d10b0f45"
-PHONE_NUMBER = "+375295620114"
-
+import os
+from flask import Flask
+import threading
 from pyrogram import Client, filters
 from pyrogram.errors import FloodWait, PeerIdInvalid, UsernameNotOccupied
 import asyncio
 import re
-import time
+
+# Берем данные из переменных окружения (их нужно задать на Render)
+API_ID = int(os.environ.get("API_ID", 35509519))
+API_HASH = os.environ.get("API_HASH", "e4880e5a9e196645600b3ce9d10b0f45")
+PHONE_NUMBER = os.environ.get("PHONE_NUMBER", "+375295620114")
 
 # ==========================================
-# 🚀 ИНИЦИАЛИЗАЦИЯ
+# 🌐 ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы не было ошибки "No open ports detected")
 # ==========================================
-app = Client(
-    name="my_account",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    phone_number=PHONE_NUMBER
-)
+app_web = Flask(__name__)
+
+@app_web.route('/')
+@app_web.route('/health')
+def health():
+    return "OK", 200
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app_web.run(host='0.0.0.0', port=port)
+
+# Запускаем веб-сервер в фоновом потоке (он не мешает работе бота)
+threading.Thread(target=run_web, daemon=True).start()
 
 # ==========================================
-# 📖 БОЛЬШАЯ БАЗА ОТВЕТОВ (РАСШИРЕННАЯ)
+# 📖 БОЛЬШАЯ БАЗА ОТВЕТОВ
 # ==========================================
 AUTO_RESPONSES = {
     # ===== ПРИВЕТСТВИЯ =====
@@ -40,10 +50,6 @@ AUTO_RESPONSES = {
     # ===== БЛАГОДАРНОСТИ =====
     ("спасибо", "благодарю", "спс", "thanks", "thank you", "thx", "благодарствую", "мерси", "сенк", "спасибки", "спасибо большое", "огромное спасибо", "благодарна", "благодарен"): 
         "Всегда рад помочь! 👍 @v_s_o3 обязательно ответит. Хорошего дня!",
-    
-    # ===== ВОПРОСЫ О ВРЕМЕНИ =====
-    ("сколько время", "который час", "время", "часы", "какое время", "во сколько", "сколько часов", "который сейчас час", "что по времени"): 
-        "Я не знаю точного времени, но я всегда на связи! ⏰ А @v_s_o3 ответит на твой вопрос как только освободится.",
     
     # ===== ПРОЩАНИЯ =====
     ("пока", "до свидания", "удачи", "goodbye", "до встречи", "bye", "bb", "покеда", "счастливо", "всего хорошего", "всего доброго", "до скорого", "прощай", "увидимся"): 
@@ -64,18 +70,6 @@ AUTO_RESPONSES = {
     # ===== РАБОТА =====
     ("работа", "вакансия", "сотрудничество", "предложение работы", "трудоустройство", "работать", "работник", "должность", "резюме", "вакансии", "сотрудник"): 
         "Вопросы по работе и сотрудничеству @v_s_o3 обсудит с тобой лично! 📝 Оставь свои контакты.",
-    
-    # ===== ОБЩЕНИЕ =====
-    ("извини", "прости", "сорри", "пардон", "извините", "прошу прощения", "виноват", "косяк", "ошибся"): 
-        "Ничего страшного! 😊 @v_s_o3 поймёт. Что ты хотел сказать?",
-    
-    # ===== ВОПРОСЫ О ДОСТУПНОСТИ =====
-    ("когда ответит", "когда будет", "когда освободится", "сколько ждать", "долго ждать", "когда придет", "когда появится", "ждем", "ожидание", "терпение"): 
-        "⏳ @v_s_o3 обычно отвечает в течение нескольких часов. Я передал твое сообщение!",
-    
-    # ===== ВОПРОСЫ =====
-    ("вопрос", "спросить", "интересует", "интересно", "хочу узнать", "уточнить", "выяснить", "не пойму", "непонятно", "разобраться"): 
-        "Задавай вопрос! ✍️ Я запишу и передам @v_s_o3. Постарайся описать всё максимально подробно.",
     
     # ===== КОНТАКТЫ =====
     ("контакты", "связаться", "номер телефона", "телефон", "как связаться", "номер", "телеграм", "instagram", "соцсети", "ссылка"): 
@@ -111,72 +105,14 @@ AUTO_RESPONSES = {
 }
 
 # ==========================================
-# 📢 РАССЫЛКА (ТОЛЬКО ОТ @v_s_o3)
+# 🚀 ИНИЦИАЛИЗАЦИЯ
 # ==========================================
-@app.on_message(filters.text)
-async def broadcast_command(client, message):
-    # Проверяем команду
-    if not message.text.startswith("/рассылка"):
-        return
-    
-    print("🚀 ОБНАРУЖЕНА КОМАНДА РАССЫЛКИ!")
-    
-    # Проверяем, что команда от @v_s_o3
-    try:
-        owner = await client.get_users("v_s_o3")
-        if message.from_user.id != owner.id:
-            print(f"❌ Команда не от @v_s_o3")
-            return
-    except:
-        print("❌ Не могу найти @v_s_o3")
-        return
-    
-    print("✅ Команда от @v_s_o3")
-    
-    # Парсим команду
-    match = re.search(r'/рассылка\s+"([^"]+)"\s+(.*)', message.text)
-    
-    if not match:
-        await message.reply("❌ Формат: /рассылка \"Текст\" @user1 @user2")
-        return
-    
-    text = match.group(1)
-    users_raw = match.group(2).split()
-    users = [u.replace("@", "").strip() for u in users_raw if u.strip()]
-    
-    if not users:
-        await message.reply("❌ Укажите получателей!")
-        return
-    
-    print(f"📤 Рассылка для {len(users)} пользователей")
-    print(f"📝 Текст: {text[:50]}...")
-    
-    # Отправляем статус
-    status = await message.reply(f"⏳ Начинаю рассылку для {len(users)} пользователей...")
-    
-    success = 0
-    failed = 0
-    failed_list = []
-    
-    # Отправляем сообщения
-    for i, username in enumerate(users, 1):
-        try:
-            print(f"  Отправка {i}/{len(users)}: @{username}")
-            await client.send_message(username, text)
-            success += 1
-            await asyncio.sleep(1.5)
-        except Exception as e:
-            failed += 1
-            failed_list.append(f"@{username}")
-            print(f"  ❌ Ошибка для @{username}: {e}")
-    
-    # Отчет
-    report = f"✅ Рассылка завершена!\n\n✅ Успешно: {success}\n❌ Ошибок: {failed}"
-    if failed_list:
-        report += f"\n\n❌ Не удалось: {', '.join(failed_list)}"
-    
-    await status.edit(report)
-    print("✅ Рассылка завершена!")
+app = Client(
+    name="my_account",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    phone_number=PHONE_NUMBER
+)
 
 # ==========================================
 # 🤖 АВТООТВЕТЧИК
@@ -206,25 +142,98 @@ async def auto_responder(client, message):
                 print(f"❌ Ошибка автоответа: {e}")
 
 # ==========================================
+# 📢 РАССЫЛКА (ТОЛЬКО ОТ @v_s_o3)
+# ==========================================
+@app.on_message(filters.text)
+async def broadcast_command(client, message):
+    # Проверяем команду
+    if not message.text.startswith("/рассылка"):
+        return
+    
+    print("🚀 ОБНАРУЖЕНА КОМАНДА РАССЫЛКИ!")
+    
+    # Проверяем, что команда от @v_s_o3
+    try:
+        owner = await client.get_users("v_s_o3")
+        if message.from_user.id != owner.id:
+            print(f"❌ Команда не от @v_s_o3")
+            return
+    except Exception as e:
+        print(f"❌ Не могу найти @v_s_o3: {e}")
+        return
+    
+    print("✅ Команда от @v_s_o3")
+    
+    # Парсим команду
+    # Формат: /рассылка "Текст сообщения" @user1 @user2
+    match = re.search(r'/рассылка\s+"([^"]+)"\s+(.*)', message.text)
+    
+    if not match:
+        print("❌ Неправильный формат")
+        await message.reply("❌ Формат: /рассылка \"Текст\" @user1 @user2")
+        return
+    
+    text_to_send = match.group(1)
+    usernames_raw = match.group(2).split()
+    usernames = [u.replace("@", "").strip() for u in usernames_raw if u.strip()]
+    
+    if not usernames:
+        await message.reply("❌ Укажите получателей!")
+        return
+    
+    print(f"📤 Рассылка для {len(usernames)} пользователей")
+    print(f"📝 Текст: {text_to_send[:50]}...")
+    print(f"👥 Пользователи: {usernames}")
+    
+    # Отправляем статус
+    status = await message.reply(f"⏳ Начинаю рассылку для {len(usernames)} пользователей...")
+    
+    success = 0
+    failed = 0
+    failed_list = []
+    
+    # Отправляем сообщения
+    for i, username in enumerate(usernames, 1):
+        try:
+            print(f"  Отправка {i}/{len(usernames)}: @{username}")
+            await client.send_message(username, text_to_send)
+            success += 1
+            await asyncio.sleep(1.5)  # Задержка между сообщениями
+        except FloodWait as e:
+            print(f"  ⏳ Флуд для @{username}: ждем {e.value} сек")
+            await asyncio.sleep(e.value + 2)
+            try:
+                await client.send_message(username, text_to_send)
+                success += 1
+            except:
+                failed += 1
+                failed_list.append(f"@{username}")
+        except Exception as e:
+            failed += 1
+            failed_list.append(f"@{username}")
+            print(f"  ❌ Ошибка для @{username}: {e}")
+    
+    # Отчет
+    report = f"✅ Рассылка завершена!\n\n✅ Успешно: {success}\n❌ Ошибок: {failed}"
+    if failed_list:
+        report += f"\n\n❌ Не удалось: {', '.join(failed_list)}"
+    
+    await status.edit(report)
+    print("✅ Рассылка завершена!")
+
+# ==========================================
 # 🏁 ЗАПУСК
 # ==========================================
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("🤖 ЗАПУСК ЮЗЕРБОТА С РАСШИРЕННОЙ БАЗОЙ ОТВЕТОВ")
+    print("🤖 ЗАПУСК ЮЗЕРБОТА НА RENDER.COM")
     print("="*60)
-    print(f"\n📊 Всего фраз для автоответа: {len(AUTO_RESPONSES)} категорий")
-    print("\n📌 Примеры фраз, на которые реагирует бот:")
-    
-    # Выводим первые 5 категорий
-    for i, (keywords, _) in enumerate(list(AUTO_RESPONSES.items())[:5]):
-        print(f"  {i+1}. {', '.join(keywords[:3])}{'...' if len(keywords) > 3 else ''}")
-    
-    print("\n📌 КОМАНДА ДЛЯ РАССЫЛКИ:")
+    print(f"\n📊 Всего категорий автоответов: {len(AUTO_RESPONSES)}")
+    print("\n📌 КОМАНДА ДЛЯ РАССЫЛКИ (только @v_s_o3):")
     print('  /рассылка "Текст сообщения" @user1 @user2')
-    print("\n📌 КТО МОЖЕТ ИСПОЛЬЗОВАТЬ: Только @v_s_o3")
     print("\n" + "="*60 + "\n")
     
     try:
         app.run()
     except Exception as e:
-        print(f"\n❌ Ошибка: {e}")
+        print(f"\n❌ Критическая ошибка: {e}")
