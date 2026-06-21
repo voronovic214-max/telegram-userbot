@@ -1,36 +1,19 @@
-# ==========================================
-# ИСПРАВЛЕННАЯ ВЕРСИЯ ДЛЯ PYTHON 3.14
-# ==========================================
 import os
-import sys
 import asyncio
-import threading
 import re
 from flask import Flask
 from pyrogram import Client, filters
-from pyrogram.errors import FloodWait, PeerIdInvalid, UsernameNotOccupied
+from pyrogram.errors import FloodWait, PeerIdInvalid
 
 # ==========================================
-# КОРРЕКТНОЕ СОЗДАНИЕ EVENT LOOP ДЛЯ PYTHON 3.14
-# ==========================================
-# Эта конструкция гарантированно работает на любой версии Python 3.7+
-try:
-    loop = asyncio.get_running_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-# ==========================================
-# КОНФИГ
+# ИНИЦИАЛИЗАЦИЯ
 # ==========================================
 API_ID = int(os.environ.get("API_ID", 35509519))
 API_HASH = os.environ.get("API_HASH", "e4880e5a9e196645600b3ce9d10b0f45")
 PHONE_NUMBER = os.environ.get("PHONE_NUMBER", "+375295620114")
 SESSION_STRING = os.environ.get("SESSION_STRING", None)
 
-# ==========================================
-# ВЕБ-СЕРВЕР ДЛЯ RENDER
-# ==========================================
+# Веб-сервер для Render
 app_web = Flask(__name__)
 
 @app_web.route('/')
@@ -40,66 +23,45 @@ def health():
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
-    app_web.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+    app_web.run(host='0.0.0.0', port=port, debug=False)
 
+import threading
 threading.Thread(target=run_web, daemon=True).start()
 
-# ==========================================
-# ИНИЦИАЛИЗАЦИЯ КЛИЕНТА
-# ==========================================
+# Клиент Pyrogram
 if SESSION_STRING:
-    app = Client(
-        name="my_account",
-        api_id=API_ID,
-        api_hash=API_HASH,
-        phone_number=PHONE_NUMBER,
-        session_string=SESSION_STRING
-    )
-    print("✅ Использую сохраненную сессию")
+    app = Client("my_account", api_id=API_ID, api_hash=API_HASH, 
+                 phone_number=PHONE_NUMBER, session_string=SESSION_STRING)
 else:
-    app = Client(
-        name="my_account",
-        api_id=API_ID,
-        api_hash=API_HASH,
-        phone_number=PHONE_NUMBER
-    )
-    print("🆕 Создаю новую сессию")
+    app = Client("my_account", api_id=API_ID, api_hash=API_HASH, 
+                 phone_number=PHONE_NUMBER)
 
 # ==========================================
 # АВТООТВЕТЫ
 # ==========================================
-AUTO_RESPONSES = {
-    ("привет", "здравствуйте", "добрый день", "hi", "hello", "пр", "прив"): 
+RESPONSES = {
+    ("привет", "здравствуйте", "hi", "hello", "пр", "прив"): 
         "Привет! 👋 @v_s_o3 скоро ответит!",
-    
-    ("как дела", "как жизнь", "как ты", "чё как"): 
+    ("как дела", "как жизнь", "как ты"): 
         "У меня всё отлично! 🤖 @v_s_o3 ответит позже.",
-    
-    ("срочно", "важно", "горит", "немедленно"): 
+    ("срочно", "важно", "горит"): 
         "🚨 Передал @v_s_o3!",
-    
-    ("спасибо", "благодарю", "спс", "thanks"): 
+    ("спасибо", "благодарю", "спс"): 
         "Всегда рад помочь! 👍",
-    
-    ("пока", "до свидания", "удачи", "goodbye"): 
-        "Всего хорошего! 👋",
-    
-    ("кто ты", "что ты", "бот"): 
-        "Я бот-ассистент @v_s_o3 🤖",
 }
 
 # ==========================================
-# ОБРАБОТЧИК СООБЩЕНИЙ
+# ОБРАБОТЧИК
 # ==========================================
-@app.on_message(filters.text & filters.private)
-async def handle_messages(client, message):
+@app.on_message(filters.private & filters.text)
+async def handle(client, message):
     if message.from_user.id == client.me.id:
         return
     
     text = message.text.lower()
-    print(f"📩 {message.from_user.first_name}: {text[:50]}")
+    print(f"📩 {message.from_user.first_name}: {text[:30]}")
     
-    # === КОМАНДА РАССЫЛКИ ===
+    # Рассылка (только для @v_s_o3)
     if message.text.startswith("/рассылка"):
         try:
             owner = await client.get_users("v_s_o3")
@@ -115,52 +77,46 @@ async def handle_messages(client, message):
             await message.reply('❌ Формат: /рассылка "Текст" @user1 @user2')
             return
         
-        msg_text = match.group(1)
-        users_raw = match.group(2).split()
-        users = [u.replace("@", "").strip() for u in users_raw if u.strip()]
+        msg = match.group(1)
+        users = [u.replace("@", "").strip() for u in match.group(2).split() if u.strip()]
         
         if not users:
             await message.reply("❌ Укажите получателей!")
             return
         
         status = await message.reply(f"⏳ Рассылка {len(users)} пользователям...")
-        success = 0
-        failed = []
+        ok, fail = 0, []
         
         for user in users:
             try:
-                await client.send_message(user, msg_text)
-                success += 1
-                await asyncio.sleep(1)
+                await client.send_message(user, msg)
+                ok += 1
+                await asyncio.sleep(0.5)
             except Exception as e:
-                failed.append(f"@{user}")
+                fail.append(f"@{user}")
                 print(f"❌ Ошибка @{user}: {e}")
         
-        report = f"✅ Готово!\n✅ Успешно: {success}\n❌ Ошибок: {len(failed)}"
-        if failed:
-            report += f"\n❌ Не удалось: {', '.join(failed[:5])}"
+        report = f"✅ Готово!\n✅ Успешно: {ok}\n❌ Ошибок: {len(fail)}"
+        if fail:
+            report += f"\n❌ Не удалось: {', '.join(fail[:5])}"
         await status.edit(report)
         return
     
-    # === АВТООТВЕТЫ ===
-    for keywords, reply in AUTO_RESPONSES.items():
-        if any(k in text for k in keywords):
-            try:
-                await message.reply(reply)
-                print(f"✅ Ответ: {reply[:30]}...")
-            except Exception as e:
-                print(f"❌ Ошибка: {e}")
+    # Автоответы
+    for words, reply in RESPONSES.items():
+        if any(w in text for w in words):
+            await message.reply(reply)
             break
 
 # ==========================================
-# KEEP ALIVE
+# KEEP-ALIVE
 # ==========================================
 async def keep_alive():
     while True:
+        await asyncio.sleep(300)
         try:
-            await asyncio.sleep(300)
             await app.send_message("me", "/ping")
-            print("💓 Бот жив!")
+            print("💓 Жив")
         except:
             pass
 
@@ -168,18 +124,10 @@ async def keep_alive():
 # ЗАПУСК
 # ==========================================
 if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("🤖 ЮЗЕРБОТ ЗАПУЩЕН НА RENDER (Python 3.14 совместим)")
-    print("="*60)
-    print("📌 Команда: /рассылка \"Текст\" @user1 @user2")
-    print("📌 Keep-alive: каждые 5 минут")
-    print("="*60 + "\n")
-    
+    print("🤖 Бот запускается...")
     try:
-        # Создаем задачу для keep_alive в правильном loop
-        asyncio.ensure_future(keep_alive(), loop=loop)
-        
-        # Запускаем бота
+        loop = asyncio.get_event_loop()
+        loop.create_task(keep_alive())
         app.run()
     except Exception as e:
         print(f"❌ Ошибка: {e}")
