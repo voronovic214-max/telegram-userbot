@@ -1,6 +1,20 @@
-import os
-import sys
+# ==========================================
+# ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ EVENT LOOP ДЛЯ PYTHON 3.10+
+# ==========================================
 import asyncio
+import sys
+
+# Создаем event loop принудительно (фикс для Render)
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+# ==========================================
+# ОСТАЛЬНЫЕ ИМПОРТЫ
+# ==========================================
+import os
 import threading
 import re
 from flask import Flask
@@ -8,27 +22,14 @@ from pyrogram import Client, filters
 from pyrogram.errors import FloodWait, PeerIdInvalid, UsernameNotOccupied
 
 # ==========================================
-# ФИКС ДЛЯ PYTHON 3.10+
-# ==========================================
-if sys.version_info >= (3, 10):
-    try:
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    except:
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        except:
-            pass
-
-# ==========================================
-# КОНФИГ
+# КОНФИГ (из переменных окружения)
 # ==========================================
 API_ID = int(os.environ.get("API_ID", 35509519))
 API_HASH = os.environ.get("API_HASH", "e4880e5a9e196645600b3ce9d10b0f45")
 PHONE_NUMBER = os.environ.get("PHONE_NUMBER", "+375295620114")
 
 # ==========================================
-# ВЕБ-СЕРВЕР ДЛЯ RENDER
+# ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы не было ошибки "No open ports detected")
 # ==========================================
 app_web = Flask(__name__)
 
